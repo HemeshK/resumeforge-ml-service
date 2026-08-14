@@ -14,7 +14,7 @@ on:
 env:
   # Regression gate. Change this only as a deliberate call about acceptable
   # model quality -- not to unblock a failing build.
-  AUC_GATE_THRESHOLD: "0.90"
+  AUC_GATE_THRESHOLD: "0.99"
 
 jobs:
   train:
