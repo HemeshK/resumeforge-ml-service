@@ -32,6 +32,7 @@ import features
 MODEL_DIR = Path(__file__).parent.parent / "model"
 MODEL_PATH = MODEL_DIR / "match_model.joblib"
 RESULTS_PATH = Path(__file__).parent / "RESULTS.md"
+METRICS_PATH = Path(__file__).parent / "metrics.json"
 
 XGB_PARAMS = dict(
     n_estimators=300,
@@ -280,6 +281,16 @@ def main():
     }
     write_results_md(ctx)
     print(f"Wrote {RESULTS_PATH}")
+
+    # Machine-readable summary for CI (the regression gate reads winner.auc).
+    metrics = {
+        "baseline_auc": baseline["auc"],
+        "model_a": {"auc": metrics_a["auc"], "macro_f1": metrics_a["macro_f1"]},
+        "model_b": {"auc": metrics_b["auc"], "macro_f1": metrics_b["macro_f1"]},
+        "winner": {"key": winner_key, "auc": winner_metrics["auc"], "macro_f1": winner_metrics["macro_f1"]},
+    }
+    METRICS_PATH.write_text(json.dumps(metrics, indent=2))
+    print(f"Wrote {METRICS_PATH}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,87 @@
+name: Train match-score model
+
+# Regression guard, NOT auto-deploy. Retrains + re-runs the domain-shortcut
+# ablation on every push touching training code, and fails the build if the
+# winning model's ROC-AUC drops below AUC_GATE_THRESHOLD. Does not touch
+# Render or the serving code (main.py) in any way.
+
+on:
+  push:
+    paths:
+      - "training/**"
+  workflow_dispatch: {}
+
+env:
+  # Regression gate. Change this only as a deliberate call about acceptable
+  # model quality -- not to unblock a failing build.
+  AUC_GATE_THRESHOLD: "0.90"
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install training dependencies
+        run: pip install -r training/requirements.txt
+
+      - name: Run training + ablation
+        run: python training/train.py
+
+      - name: Check AUC regression gate
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+
+          threshold = float(os.environ["AUC_GATE_THRESHOLD"])
+          with open("training/metrics.json") as f:
+              metrics = json.load(f)
+
+          auc = metrics["winner"]["auc"]
+          print(f"Winner: {metrics['winner']['key']}  AUC={auc:.4f}  gate={threshold}")
+
+          if auc < threshold:
+              print(f"::error::Model regressed: ROC-AUC {auc:.4f} is below the {threshold} gate")
+              sys.exit(1)
+          PY
+
+      - name: Write run summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+
+          with open("training/metrics.json") as f:
+              m = json.load(f)
+
+          winner = m["winner"]
+          print("## Match-score model training run\n")
+          print(f"**Winner:** `{winner['key']}` — ROC-AUC **{winner['auc']:.4f}**, Macro-F1 **{winner['macro_f1']:.4f}**\n")
+          print("### Ablation (same-domain-only test set)\n")
+          print("| Model | ROC-AUC | Macro-F1 |")
+          print("|---|---|---|")
+          print(f"| Floor baseline (TF-IDF cosine only) | {m['baseline_auc']:.4f} | — |")
+          print(f"| Model A (trained on ALL data) | {m['model_a']['auc']:.4f} | {m['model_a']['macro_f1']:.4f} |")
+          print(f"| Model B (trained on SAME-DOMAIN data only) | {m['model_b']['auc']:.4f} | {m['model_b']['macro_f1']:.4f} |")
+          PY
+
+      - name: Upload model + results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: match-model-${{ github.sha }}
+          path: |
+            model/match_model.joblib
+            training/RESULTS.md
+            training/metrics.json
+          if-no-files-found: error
+          retention-days: 30
