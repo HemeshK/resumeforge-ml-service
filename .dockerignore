@@ -1,0 +1,24 @@
+# Local virtualenv: 367MB of macOS/arm64 binaries, useless in a Linux image and
+# the single biggest thing keeping the build context small.
+venv/
+
+# Version control history -- not needed at runtime.
+.git/
+.github/
+
+# Training pipeline is not deployed with the service (see CLAUDE.md). Keeping it
+# out also guarantees training/requirements.txt can never be installed by accident.
+training/
+
+# Python bytecode, compiled by local 3.9 -- wrong version for a 3.11 image.
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Secrets must never enter the image. ML_SERVICE_API_KEY is read at runtime via
+# os.getenv, supplied by -e / --env-file locally and Render env settings in prod.
+.env
+.env.*
+
+# macOS filesystem cruft.
+.DS_Store

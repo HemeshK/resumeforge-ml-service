@@ -1,5 +1,12 @@
 fastapi==0.128.8
 uvicorn[standard]==0.39.0
+# Pinned for pickle compatibility, not because we import it casually:
+# scoring.py imports numpy directly, and model/match_model.joblib was
+# pickled under numpy 2.0.2 (see .github/workflows/train.yml). numpy was
+# previously only a transitive, unpinned scikit-learn dependency, so a fresh
+# build could resolve a newer numpy whose array internals fail to unpickle
+# the stored TfidfVectorizer -- at import time, killing the process on boot.
+numpy==2.0.2
 scikit-learn==1.6.1
 # CPU-only build: the plain `xgboost` PyPI wheel bundles GPU support and
 # pulls in nvidia-nccl-cu12 (~340MB) on Linux even though we never train/serve
